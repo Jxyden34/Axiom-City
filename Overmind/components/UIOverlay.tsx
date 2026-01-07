@@ -314,7 +314,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
       </div>
 
       {/* AI Goal Panel Floating */}
-      <div className={`absolute bottom-24 right-4 w-80 bg-indigo-900/90 text-white rounded-xl border-2 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.4)] backdrop-blur-md overflow-hidden transition-all pointer-events-auto`}>
+      <div className={`absolute bottom-52 right-4 w-80 bg-indigo-900/90 text-white rounded-xl border-2 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.4)] backdrop-blur-md overflow-hidden transition-all pointer-events-auto`}>
         <div className="bg-indigo-800/80 px-3 md:px-4 py-1.5 md:py-2 flex justify-between items-center border-b border-indigo-600">
           <span className="font-bold uppercase text-[10px] md:text-xs tracking-widest flex items-center gap-2 shadow-sm">
             <>
