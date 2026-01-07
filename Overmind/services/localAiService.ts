@@ -31,17 +31,25 @@ const callLocalAI = async (prompt: string, systemPrompt: string = "You are a hel
         });
 
         if (!response.ok) {
-            console.error(`[AI SERVICE] API Error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            const msg = `[AI SERVICE] API Error: ${response.status} ${response.statusText} - ${errorText}`;
+            console.error(msg);
+            logToFile(msg);
             return null;
         }
 
         const data = await response.json();
         return data.choices[0].message.content;
     } catch (e) {
-        console.error("[AI SERVICE] Exception:", e);
+        const msg = `[AI SERVICE] Exception: ${e}`;
+        console.error(msg);
+        logToFile(msg);
         return null;
     }
 };
+
+// Log config on load
+logToFile(`AI Service Initialized. URL: ${API_URL}, Key Present: ${!!API_KEY}`);
 
 // --- Goal Generation ---
 
@@ -95,7 +103,9 @@ export const generateCityGoal = async (stats: CityStats, grid: Grid): Promise<AI
 
 export const generateNewsEvent = async (stats: CityStats, recentAction: string | null): Promise<NewsItem | null> => {
     const context = `City Stats - Pop: ${stats.population}, Money: ${stats.money}, Day: ${stats.day}. ${recentAction ? `Recent Action: ${recentAction}` : ''}`;
-    const prompt = `Generate a very short, isometric-sim-city style news headline based on the city state. Can be funny, cynical, or celebratory. 
+    const prompt = `Generate a BIZARRE, SCI-FI, LOVECRAFTIAN, or FUNNY decision event for the City Mayor. 
+    It must be strange. Examples: "A portal opens," "Cats start speaking," "A time traveler demands a tax refund," "The moon is hatching," "A mysterious fleet of immigrant boats arrives from the fog."
+
     Respond with VALID JSON ONLY. Format:
     {
        "text": "Headline here",
@@ -124,24 +134,30 @@ export const generateNewsEvent = async (stats: CityStats, recentAction: string |
     return null;
 };
 
-// --- Game Action (Agent) ---
+// --- Action Generation ---
 
-export const generateGameAction = async (stats: CityStats, grid: Grid, lastAction: AIAction | null, recentFailures: string[] = []): Promise<AIAction | null> => {
-    // 1. Construct Context
+export const generateGameAction = async (stats: CityStats, grid: Grid, recentFailures: { x: number, y: number }[]): Promise<AIAction | null> => {
+    // 1. Context
     const buildingCounts: Record<string, number> = {};
-    // Vision Map Removed by user request
-    // const mapWithCoords = generateAsciiMap(grid, recentFailures); 
+    const waterTiles: string[] = [];
 
-    // Log the Vision Block - REMOVED
-    // logToFile(`\n--- AI VISION MAP ---\n${mapWithCoords}\n---------------------`);
+    // Analyze Grid
+    grid.flat().forEach(tile => {
+        buildingCounts[tile.buildingType] = (buildingCounts[tile.buildingType] || 0) + 1;
+        if (tile.buildingType === BuildingType.Water) {
+            waterTiles.push(`${tile.x},${tile.y}`);
+        }
+    });
+
+    const lastAction = stats.day > 0 ? null : null; // TODO: Pass last action history
 
     const context = {
         day: stats.day,
         money: stats.money,
         population: stats.population,
         buildings: buildingCounts,
-        lastMove: lastAction ? `${lastAction.action} ${lastAction.buildingType || ''} at ${lastAction.x},${lastAction.y}` : "None",
-        forbiddenTiles: recentFailures.length > 0 ? recentFailures.join(', ') : "None",
+        forbiddenTiles: recentFailures.length > 0 ? recentFailures.map(f => `[${f.x},${f.y}]`).join(', ') : "None",
+        waterLocations: waterTiles.length > 20 ? "MANY (Islands)" : waterTiles.join(', '),
         costs: Object.entries(BUILDINGS).map(([k, v]) => ({ type: k, cost: v.cost, income: v.incomeGen, pop: v.popGen }))
     };
 
@@ -153,7 +169,7 @@ export const generateGameAction = async (stats: CityStats, grid: Grid, lastActio
     const lowMoneyWarning = stats.money < 100 ? "CRITICAL: MONEY LOW (<100). YOU MUST BUILD COMMERCIAL OR INDUSTRIAL TO SURVIVE. DO NOT BUILD RESIDENTIAL OR PARKS." : "";
 
     const prompt = `
-You are playing a city builder game. You must make a MOVE.
+You are partially playing a city builder game. You must make a MOVE.
 Current Stats: ${JSON.stringify(context)}
 
 Available Moves:
@@ -166,8 +182,9 @@ ${lowMoneyWarning}
 Rules:
 - You cannot spend more money than you have.
 - You can ONLY build buildings listed in 'Available Moves'.
-- FORBIDDEN: Do not try to build on tiles listed in 'forbiddenTiles'. These are BANNED. NEVER PLACE THERE.
-    - STRATEGY: Residential costs money. Commercial/Industrial makes money. Balance them.
+- FORBIDDEN: Do not build on WATER tiles. The map has water. avoiding ${waterTiles.length} water tiles is priority.
+- FORBIDDEN: Do not try to build on tiles listed in 'forbiddenTiles' (recent failures).
+- STRATEGY: Residential costs money. Commercial/Industrial makes money. Balance them.
 - Connect buildings to roads if possible.
 
 Respond with valid JSON ONLY. Do not explain anything outside the JSON.
@@ -236,4 +253,68 @@ Format:
         logToFile(`EXCEPTION: ${e}`);
         return null;
     }
+};
+
+// --- Weird Event Generation ---
+
+export interface AIEventResponse {
+    title: string;
+    description: string;
+    choices: {
+        yesLabel: string;
+        noLabel: string;
+        yesEffect: string;
+        noEffect: string;
+    }
+}
+
+export const generateWeirdEvent = async (stats: CityStats): Promise<AIEventResponse | null> => {
+    const context = `Year 2xxx. City Stats: Pop ${stats.population}, Money ${stats.money}.`;
+    const prompt = `Generate a BIZARRE, SCI-FI, LOVECRAFTIAN, or FUNNY decision event for the City Mayor. 
+    It must be strange. Examples: "A portal opens," "Cats start speaking," "A time traveler demands a tax refund," "The moon is hatching," "A mysterious fleet of immigrant boats arrives from the fog."
+
+    Respond with VALID JSON ONLY. Format:
+    {
+        "title": "Short catchy title",
+        "description": "One sentence describing the weird situation.",
+        "choices": {
+            "yesLabel": "Action A (Creative)",
+            "noLabel": "Action B (Boring/Refuse)",
+            "yesEffect": "What happens if Yes (e.g. +Money, -Pop)",
+            "noEffect": "What happens if No"
+        }
+    }`;
+
+    const content = await callLocalAI(`${context}\n${prompt}`, "You are a creative Sci-Fi writer engine. JSON only.");
+    if (!content) return null;
+
+    try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+        console.error("Event parse error", e);
+    }
+    return null;
+};
+
+export const decideEvent = async (event: AIEventResponse, stats: CityStats): Promise<'YES' | 'NO'> => {
+    const prompt = `You are the AI Mayor. Validating decision: "${event.title}".
+    Situation: ${event.description}
+    Choice A: ${event.choices.yesLabel} -> ${event.choices.yesEffect}
+    Choice B: ${event.choices.noLabel} -> ${event.choices.noEffect}
+
+    Based on your personality (Chaotic Good AI), pick YES (Choice A) or NO (Choice B).
+    Respond with VALID JSON ONLY: { "decision": "YES" | "NO", "reasoning": "short text" }`;
+
+    const content = await callLocalAI(prompt, "You are the AI Mayor. JSON only.");
+    if (!content) return 'NO';
+
+    try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const res = JSON.parse(jsonMatch[0]);
+            return res.decision;
+        }
+    } catch (e) { }
+    return 'NO';
 };

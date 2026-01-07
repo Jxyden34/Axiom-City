@@ -670,6 +670,121 @@ const Bird = ({ position, speed, offset }: { position: [number, number, number],
   )
 }
 
+const boatColors = ['#f8fafc', '#e2e8f0', '#94a3b8']; // White/Grey hulls
+
+const BoatSystem = ({ grid }: { grid: Grid }) => {
+  const waterTiles = useMemo(() => {
+    const tiles: { x: number, y: number }[] = [];
+    grid.forEach(row => row.forEach(tile => {
+      // Bridges are also water-traversable usually, or at least under them
+      if (tile.buildingType === BuildingType.Water || tile.buildingType === BuildingType.Bridge) {
+        tiles.push({ x: tile.x, y: tile.y });
+      }
+    }));
+    return tiles;
+  }, [grid]);
+
+  const boatCount = Math.min(waterTiles.length, 20); // Fewer boats than cars
+  const boatsRef = useRef<THREE.InstancedMesh>(null);
+  const boatsState = useRef<Float32Array>(new Float32Array(0));
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  useEffect(() => {
+    if (waterTiles.length < 2) return;
+    boatsState.current = new Float32Array(boatCount * 6);
+    const newColors = new Float32Array(boatCount * 3);
+
+    for (let i = 0; i < boatCount; i++) {
+      const startNode = waterTiles[Math.floor(Math.random() * waterTiles.length)];
+      boatsState.current[i * 6 + 0] = startNode.x;
+      boatsState.current[i * 6 + 1] = startNode.y;
+      boatsState.current[i * 6 + 2] = startNode.x;
+      boatsState.current[i * 6 + 3] = startNode.y;
+      boatsState.current[i * 6 + 4] = 1;
+      // Slower than cars
+      boatsState.current[i * 6 + 5] = getRandomRange(0.005, 0.015);
+
+      const color = new THREE.Color(boatColors[Math.floor(Math.random() * boatColors.length)]);
+      newColors[i * 3] = color.r; newColors[i * 3 + 1] = color.g; newColors[i * 3 + 2] = color.b;
+    }
+
+    if (boatsRef.current) {
+      boatsRef.current.instanceColor = new THREE.InstancedBufferAttribute(newColors, 3);
+    }
+  }, [waterTiles, boatCount]);
+
+  useFrame((state) => {
+    if (!boatsRef.current || waterTiles.length < 2 || boatsState.current.length === 0) return;
+
+    // Bobbing animation
+    const time = state.clock.elapsedTime;
+
+    for (let i = 0; i < boatCount; i++) {
+      const idx = i * 6;
+      let curX = boatsState.current[idx];
+      let curY = boatsState.current[idx + 1];
+      let tarX = boatsState.current[idx + 2];
+      let tarY = boatsState.current[idx + 3];
+      let progress = boatsState.current[idx + 4];
+      const speed = boatsState.current[idx + 5];
+
+      progress += speed;
+
+      if (progress >= 1) {
+        curX = tarX;
+        curY = tarY;
+        progress = 0;
+        const neighbors = waterTiles.filter(t => (Math.abs(t.x - curX) === 1 && t.y === curY) || (Math.abs(t.y - curY) === 1 && t.x === curX));
+        if (neighbors.length > 0) {
+          const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+          tarX = next.x; tarY = next.y;
+        } else {
+          const rnd = waterTiles[Math.floor(Math.random() * waterTiles.length)];
+          curX = rnd.x; curY = rnd.y; tarX = rnd.x; tarY = rnd.y;
+        }
+      }
+
+      boatsState.current[idx] = curX;
+      boatsState.current[idx + 1] = curY;
+      boatsState.current[idx + 2] = tarX;
+      boatsState.current[idx + 3] = tarY;
+      boatsState.current[idx + 4] = progress;
+
+      const gx = MathUtils.lerp(curX, tarX, progress);
+      const gy = MathUtils.lerp(curY, tarY, progress);
+      const dx = tarX - curX;
+      const dy = tarY - curY;
+      const angle = Math.atan2(dy, dx);
+
+      // Offset logic same as cars but maybe wider
+      const offsetAmt = 0.2;
+
+      const [wx, _, wz] = gridToWorld(gx, gy);
+
+      const bob = Math.sin(time * 2 + i) * 0.02;
+      const roll = Math.sin(time * 1.5 + i) * 0.05;
+
+      dummy.position.set(wx, -0.6 + 0.15 + bob, wz); // Water level is -0.6
+      dummy.rotation.set(roll, -angle, 0);
+      dummy.scale.set(0.6, 0.2, 0.3); // Boat shape
+      dummy.updateMatrix();
+      boatsRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    boatsRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  if (waterTiles.length < 2) return null;
+
+  return (
+    <group>
+      <instancedMesh ref={boatsRef} args={[boxGeo, undefined, boatCount]} castShadow>
+        <meshStandardMaterial roughness={0.2} metalness={0.1} />
+      </instancedMesh>
+    </group>
+  );
+};
+
+
 const EnvironmentEffects = () => {
   return (
     <group raycast={() => null}>
@@ -685,7 +800,7 @@ const EnvironmentEffects = () => {
         <planeGeometry args={[GRID_SIZE * 4, GRID_SIZE * 4]} />
         <meshStandardMaterial color="#3b82f6" roughness={0.1} metalness={0.5} opacity={0.8} transparent />
       </mesh>
-    </group>
+    </group >
   )
 };
 
@@ -839,6 +954,7 @@ const IsoMap: React.FC<IsoMapProps> = ({ grid, onTileClick, hoveredTool, populat
           )}
           <group raycast={() => null}>
             <TrafficSystem grid={grid} />
+            <BoatSystem grid={grid} />
             <PopulationSystem population={population} grid={grid} />
             {showPreview && hoveredTile && (
               <group position={[previewPos[0], 0, previewPos[2]]}>

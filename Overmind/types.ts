@@ -118,6 +118,19 @@ export interface NewsItem {
   type: 'positive' | 'negative' | 'neutral';
 }
 
+// --- Events & Decisions ---
+export interface GameEvent {
+  id: string;
+  title: string;
+  description: string;
+  type: 'weird' | 'disaster' | 'opportunity';
+  choices: {
+    label: string;
+    effectDescription: string;
+    onSelect: () => void; // Handled in logic
+  }[];
+}
+
 export interface AIAction {
   action: 'BUILD' | 'DEMOLISH' | 'WAIT';
   buildingType?: BuildingType;

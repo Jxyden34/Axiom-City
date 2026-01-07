@@ -9,7 +9,8 @@ import IsoMap from './components/IsoMap';
 import UIOverlay from './components/UIOverlay';
 import StartScreen from './components/StartScreen';
 import { updateSimulation, INITIAL_STATS } from './utils/simulation';
-import { generateGameAction, generateCityGoal, generateNewsEvent } from './services/localAiService';
+import { generateGameAction, generateCityGoal, generateNewsEvent, generateWeirdEvent, decideEvent, AIEventResponse } from './services/localAiService';
+import EventModal from './components/EventModal';
 
 // Initialize empty grid with island shape generation for 3D visual interest
 // Initialize grid with random noise for terrain (Islands/Lakes)
@@ -98,12 +99,53 @@ function App() {
     setIsGeneratingGoal(false);
   }, [isGeneratingGoal]);
 
+  // Weird Event State
+  const [openEvent, setOpenEvent] = useState<AIEventResponse | null>(null);
+  const [isDecidingEvent, setIsDecidingEvent] = useState(false);
+
+  // ... previous helpers ...
+
+  const handleTriggerWeirdEvent = useCallback(async () => {
+    if (openEvent || !aiEnabledRef.current) return;
+
+    const event = await generateWeirdEvent(statsRef.current);
+    if (event) {
+      setOpenEvent(event);
+      setIsDecidingEvent(true);
+
+      // Auto-decide after delay
+      setTimeout(async () => {
+        const decision = await decideEvent(event, statsRef.current);
+
+        // Apply (Visual only for now, or simple money logic)
+        // Ideally we parse effect, but for now we just log/news it
+        setIsDecidingEvent(false);
+        setOpenEvent(null);
+
+        let impactText = decision === 'YES' ? event.choices.yesEffect : event.choices.noEffect;
+        addNewsItem({
+          id: Date.now().toString(),
+          text: `MAYOR RULING: "${event.title}" - ${decision}! Result: ${impactText}`,
+          type: decision === 'YES' ? 'positive' : 'negative'
+        });
+
+      }, 5000); // 5 seconds suspense
+    }
+  }, [addNewsItem, openEvent]);
+
   const fetchNews = useCallback(async () => {
     // chance to fetch news per tick
     if (!aiEnabledRef.current || Math.random() > 0.15) return;
+
+    // 5% chance to trigger WEIRD STUFF instead of news
+    if (Math.random() < 0.05) {
+      handleTriggerWeirdEvent();
+      return;
+    }
+
     const news = await generateNewsEvent(statsRef.current, null);
     if (news) addNewsItem(news);
-  }, [addNewsItem]);
+  }, [addNewsItem, handleTriggerWeirdEvent]);
 
   // Helper to execute actions (USER or AI)
   const performAction = useCallback((action: string, type: BuildingType | null, x: number, y: number) => {
@@ -269,15 +311,32 @@ function App() {
 
       console.log("[AI AGENT] Thinking...");
       try {
-        const action = await generateGameAction(statsRef.current, gridRef.current, lastActionRef.current, aiFailuresRef.current);
+
+        // Update: Pass grid to AI for vision
+        const action = await generateGameAction(statsRef.current, gridRef.current, aiFailuresRef.current);
 
         if (action) {
-          // Capture failures (from Safety Block or Execution)
-          if (action.failedAttempt) {
-            setAiFailures(prev => {
-              const newState = [...prev, `${action.failedAttempt?.x},${action.failedAttempt?.y}`];
-              return newState.slice(-20);
-            });
+          // 1. Check strict constraints
+          if (action.action === 'BUILD') {
+            // Additional safety check on Client side
+            const tile = gridRef.current[action.y]?.[action.x];
+
+            // BLOCK WATER (Exceptions: Bridges)
+            if (tile?.buildingType === BuildingType.Water && action.buildingType !== BuildingType.Bridge) {
+              console.warn("AI tried to build non-bridge on water. Blocking.");
+              setAiFailures(prev => [...prev, { x: action.x, y: action.y }]);
+              aiFailuresRef.current.push({ x: action.x, y: action.y });
+              return;
+            }
+
+            // BLOCK OVERWRITING (AI must use empty tiles)
+            // Exception: If tile is None, it's fine. If it's anything else, BLOCK.
+            if (tile && tile.buildingType !== BuildingType.None) {
+              console.warn(`AI tried to build ${action.buildingType} on top of ${tile.buildingType}. Blocking.`);
+              setAiFailures(prev => [...prev, { x: action.x, y: action.y }]);
+              aiFailuresRef.current.push({ x: action.x, y: action.y });
+              return;
+            }
           }
 
           if (action.action === 'WAIT') {
@@ -517,6 +576,15 @@ function App() {
       {/* Start Screen Overlay */}
       {!gameStarted && (
         <StartScreen onStart={handleStart} />
+      )}
+
+      {/* Event Modal Overlay */}
+      {openEvent && (
+        <EventModal
+          event={openEvent}
+          aiDeciding={isDecidingEvent}
+          onDecisionMade={() => { }}
+        />
       )}
 
       {/* UI Layer */}
