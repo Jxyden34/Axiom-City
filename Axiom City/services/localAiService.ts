@@ -185,6 +185,44 @@ export const generateNewsEvent = async (stats: CityStats, recentAction: string |
 
 // --- Action Generation ---
 
+// --- Helper: Generate Valid Moves ---
+const getAvailableMoves = (grid: Grid, stats: CityStats, forbidden: { x: number, y: number }[]): string[] => {
+    const validTiles: { x: number, y: number }[] = [];
+    const forbiddenSet = new Set(forbidden.map(f => `${f.x},${f.y}`));
+
+    // 1. Scan for valid EMPTY LAND
+    grid.forEach(row => row.forEach(tile => {
+        if (tile.buildingType === BuildingType.None && !forbiddenSet.has(`${tile.x},${tile.y}`)) {
+            validTiles.push({ x: tile.x, y: tile.y });
+        }
+    }));
+
+    // 2. Pick a random subset of tiles (e.g. 5) to keep prompt size manageable
+    // We shuffle a copy of the array
+    const selectedTiles = [...validTiles].sort(() => 0.5 - Math.random()).slice(0, 5);
+
+    const moves: string[] = [];
+
+    // 3. For each tile, offer affordable buildings (excluding Water/Bridge for simplicity)
+    const affordableBuildings = Object.values(BUILDINGS).filter(b =>
+        b.type !== BuildingType.None &&
+        b.type !== BuildingType.Water &&
+        b.type !== BuildingType.Bridge &&
+        b.cost <= stats.money
+    );
+
+    if (affordableBuildings.length === 0) return [];
+
+    selectedTiles.forEach(tile => {
+        affordableBuildings.forEach(b => {
+            // Strings like "BUILD Residential 12 5"
+            moves.push(`BUILD ${b.type} ${tile.x} ${tile.y}`);
+        });
+    });
+
+    return moves;
+};
+
 export const generateGameAction = async (stats: CityStats, grid: Grid, recentFailures: { x: number, y: number }[]): Promise<AIAction | null> => {
     // 1. Context
     const buildingCounts: Record<string, number> = {};
@@ -202,66 +240,53 @@ export const generateGameAction = async (stats: CityStats, grid: Grid, recentFai
         day: stats.day,
         money: stats.money,
         population: stats.population,
-        demographics: stats.demographics, // Added for smart service scaling
-        currentGoal: stats.currentGoal, // Added so AI sees the active challenge
+        demographics: stats.demographics,
+        currentGoal: stats.currentGoal,
         crimeRate: stats.crimeRate,
         security: stats.security,
         pollution: stats.pollutionLevel,
         buildings: buildingCounts,
-        forbiddenTiles: recentFailures.length > 0 ? recentFailures.map(f => `[${f.x},${f.y}]`).join(', ') : "None",
-        waterLocations: waterTiles.length > 20 ? "MANY (Islands)" : waterTiles.join(', '),
-        costs: Object.entries(BUILDINGS).map(([k, v]) => ({ type: k, cost: v.cost, income: v.incomeGen, pop: v.popGen }))
+        costs: Object.values(BUILDINGS).filter(b => b.type !== BuildingType.None).map(b => ({ type: b.type, cost: b.cost }))
     };
 
-    // 2. Prompt
-    const affordableBuildings = Object.entries(BUILDINGS)
-        .filter(([_, v]) => stats.money >= v.cost && v.type !== BuildingType.None)
-        .map(([k, v]) => `- ${v.name} ($${v.cost}) -> BUILD ${k} <X> <Y>`);
+    // 2. Generate Valid Moves
+    const validMoves = getAvailableMoves(grid, stats, recentFailures);
+    // If no moves (e.g. no money or no space), fallback to WAIT
+    const movesList = validMoves.length > 0 ? validMoves.join('\n') : "WAIT (No valid moves or funds)";
 
-    const lowMoneyWarning = stats.money < 2000 ? "CRITICAL: MONEY LOW (<2000). YOU MUST BUILD COMMERCIAL OR GOLD MINES TO SURVIVE. DO NOT BUILD RESIDENTIAL OR PARKS." : "";
+    const lowMoneyWarning = stats.money < 2000 ? "CRITICAL: MONEY LOW (<2000). YOU MUST BUILD COMMERCIAL OR GOLD MINES TO SURVIVE." : "";
 
     const prompt = `
-You are partially playing a city builder game. You must make a MOVE.
+You are playing a city builder game. 
 Current Stats: ${JSON.stringify(context)}
 
-Available Moves:
-${affordableBuildings.length > 0 ? affordableBuildings.join('\n') : "- NONE (Insufficient Funds)"}
+**AVAILABLE MOVES**:
+${movesList}
 - WAIT (Save money)
 
 ${lowMoneyWarning}
 
-Rules:
-- You cannot spend more money than you have.
-- You can ONLY build buildings listed in 'Available Moves'.
-- **CRITICAL**: DO NOT BUILD ON OCCUPIED TILES. Only build on EMPTY land (None).
-- **CRITICAL**: DO NOT DEMOLISH ANYTHING. You are not allowed to destroy buildings.
-- FORBIDDEN: Do not build on WATER tiles. The map has water. avoiding ${waterTiles.length} water tiles is priority.
-- FORBIDDEN: Do not try to build on tiles listed in 'forbiddenTiles' (recent failures).
-- STRATEGY:
-  1. **CHALLENGE**: If 'currentGoal' is active, PRIORITIZE it! (e.g. if Goal is 'Build 5 Parks', build Park).
-  2. **CRIME**: If CrimeRate > Security, you MUST build **Police**. Law and order is essential.
-  3. **POLLUTION**: If Pollution > 15, you MUST build a **Park** to clean the air and improve happiness.
-  4. **HAPPINESS**: If Happiness < 70, you MUST build **Park** or **Commercial** (Entertainment). Unhappy citizens leave!
-  3. **FIRE SAFETY**: If you have > 10 buildings, ensure there is at least 1 **FireStation**.
-  4. **GREED**: If Safety > 90 and Money > $3000, build a **Casino**! It prints money (but lowers safety).
-  5. **ZONING**: Do NOT build **Industrial** next to **Residential** (Pollution). Keep them separate!
-  6. **PEOPLE FIRST**: If (Jobs > Population), build **Residential** or **Apartment**.
-  7. **SOLVENCY**: 
-     - If Money > $1500 and Trending Down: Build **GoldMine**.
-     - If Money < $500: Build **Commercial** (Cheap income).
-  8. **DEMOGRAPHICS**: 
-     - Children > 2 -> **School**.
-     - Seniors > 5 -> **Hospital**.
-  9. **INFRASTRUCTURE**: Every 3 buildings, build a **Road** to connect them.
+**CRITICAL INSTRUCTIONS**:
+1. You can **ONLY** choose from the 'AVAILABLE MOVES' list above.
+2. **DO NOT** invent coordinates. **DO NOT** invent buildings.
+3. If you want to build, you must output the exact string from the list (e.g. "BUILD Residential 12 5").
+4. If you decide to WAIT, output "WAIT".
 
-Respond with valid JSON ONLY. Do not explain anything outside the JSON.
-Format:
+**STRATEGY GUIDE**:
+  1. **CHALLENGE**: If 'currentGoal' is active, PRIORITIZE it!
+  2. **CRIME**: If CrimeRate > Security, BUILD **Police** if available.
+  3. **POLLUTION**: If Pollution > 15, BUILD **Park** or **University** (Green tech).
+  4. **HAPPINESS**: If Happiness < 70, BUILD **Park** or **Commercial**.
+  5. **GROWTH**: If you have money, BUILD **Residential** or **Industrial**.
+  6. **SOLVENCY**: If Money is low, BUILD **Commercial** or **GoldMine**.
+
+Respond with VALID JSON ONLY. Format:
 {
-  "action": "BUILD" | "DEMOLISH" | "WAIT",
-  "buildingType": "Residential" | "Commercial" | "Industrial" | "Road" | "Park" | "School" | "Hospital" | "GoldMine" | "FireStation" | "Casino" | null,
+  "action": "BUILD" | "WAIT",
+  "buildingType": string | null,
   "x": number,
   "y": number,
-  "reasoning": "A short news headline explaining this move (max 10 words). E.g. 'Mayor approves new housing project'"
+  "reasoning": "Short explanation"
 }
 `;
 
