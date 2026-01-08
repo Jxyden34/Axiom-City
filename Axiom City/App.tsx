@@ -11,6 +11,7 @@ import StartScreen from './components/StartScreen';
 import { updateSimulation, INITIAL_STATS, simulateEnvironment } from './utils/simulation';
 import { generateGameAction, generateCityGoal, generateNewsEvent, generateWeirdEvent, decideEvent, AIEventResponse } from './services/localAiService';
 import EventModal from './components/EventModal';
+import { PhotoModeUI } from './components/PhotoModeUI';
 
 // Initialize empty grid with island shape generation for 3D visual interest
 // Initialize grid with random noise for terrain
@@ -80,6 +81,7 @@ function App() {
   // City History Log
   const [historyLog, setHistoryLog] = useState<HistoryLogEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false); // Lifed state
+  const [isPhotoMode, setIsPhotoMode] = useState(false);
 
   const addToHistory = useCallback((text: string, type: 'major' | 'minor' | 'disaster' | 'milestone' = 'major') => {
     // Logging history event
@@ -556,32 +558,7 @@ function App() {
         const action = await generateGameAction(statsRef.current, gridRef.current, aiFailuresRef.current);
 
         if (action) {
-          // 1. Check strict constraints
-          if (action.action === 'BUILD') {
-            // Additional safety check on Client side
-            const tile = gridRef.current[action.y]?.[action.x];
-
-            // BLOCK WATER (Exceptions: Bridges)
-            if (tile?.buildingType === BuildingType.Water && action.buildingType !== BuildingType.Bridge) {
-              console.warn("AI tried to build non-bridge on water. Blocking.");
-              setAiFailures(prev => [...prev, { x: action.x, y: action.y }]);
-              aiFailuresRef.current.push({ x: action.x, y: action.y });
-              return;
-            }
-
-            // BLOCK OVERWRITING (AI must use empty tiles)
-            // Exception: If tile is None, it's fine. If it's anything else, BLOCK.
-            if (tile && tile.buildingType !== BuildingType.None) {
-              console.warn(`AI tried to build ${action.buildingType} on top of ${tile.buildingType}. Blocking.`);
-              setAiFailures(prev => [...prev, { x: action.x, y: action.y }]);
-              aiFailuresRef.current.push({ x: action.x, y: action.y });
-              return;
-            }
-          }
-
-          if (action.action === 'WAIT') {
-            console.log("[AI AGENT] Waiting...");
-          } else if (action.action === 'BUILD' && action.buildingType && action.x !== undefined && action.y !== undefined) {
+          if (action.action === 'BUILD' && action.buildingType && action.x !== undefined && action.y !== undefined) {
             const success = performAction('BUILD', action.buildingType, action.x, action.y);
             if (success) {
               addNewsItem({
@@ -590,9 +567,12 @@ function App() {
                 type: 'neutral'
               });
             } else {
-              // Redundant fallback if performAction fails but wasn't caught by Safety Block
-              setAiFailures(prev => [...prev, `${action.x},${action.y}`].slice(-20));
+              console.warn(`[AI AGENT] Move failed: ${action.buildingType} @ ${action.x},${action.y}`);
+              setAiFailures(prev => [...prev, { x: action.x!, y: action.y! }].slice(-20));
+              aiFailuresRef.current.push({ x: action.x, y: action.y });
             }
+          } else if (action.action === 'WAIT') {
+            console.log("[AI AGENT] Waiting...");
           } else if (action.action === 'DEMOLISH' && action.x !== undefined && action.y !== undefined) {
             const success = performAction('DEMOLISH', null, action.x, action.y);
             if (success) {
@@ -824,7 +804,7 @@ function App() {
       )}
 
       {/* UI Layer */}
-      {gameStarted && (
+      {gameStarted && !isPhotoMode && (
         <UIOverlay
           stats={stats}
           selectedTool={selectedTool}
@@ -841,6 +821,7 @@ function App() {
           onResetCity={handleResetCity}
           neonMode={neonMode}
           onToggleNeon={() => setNeonMode(!neonMode)}
+          onTogglePhotoMode={() => setIsPhotoMode(true)}
           weather={weather}
           activeDisaster={activeDisaster}
           onTriggerDisaster={() => triggerDisaster()}
@@ -853,8 +834,16 @@ function App() {
         />
       )}
 
+      {/* PHOTO MODE UI */}
+      {isPhotoMode && (
+        <PhotoModeUI
+          stats={stats}
+          onExit={() => setIsPhotoMode(false)}
+        />
+      )}
+
       {/* RESEARCH BUTTON */}
-      {gameStarted && stats.research.isResearchCentreBuilt && (
+      {gameStarted && !isPhotoMode && stats.research.isResearchCentreBuilt && (
         <button
           onClick={() => setIsResearchOpen(true)}
           className="absolute top-20 right-4 z-50 bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-full shadow-lg border-2 border-sky-300 flex items-center gap-2 animate-pulse"
@@ -864,7 +853,7 @@ function App() {
       )}
 
       {/* TRAVEL BUTTON (Only Earth -> Mars or Mars -> Earth) */}
-      {gameStarted && (
+      {gameStarted && !isPhotoMode && (
         (() => {
           const hasSpacePort = grid.flat().some(t => t.buildingType === BuildingType.SpacePort);
           const canTravel = (stats.activePlanet === 'Earth' && stats.research.isMarsDiscovered && hasSpacePort) ||
@@ -884,7 +873,7 @@ function App() {
       )}
 
       {/* RESEARCH MODAL */}
-      {isResearchOpen && (
+      {isResearchOpen && !isPhotoMode && (
         <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border-2 border-sky-500 rounded-xl p-6 max-w-md w-full shadow-2xl relative animate-fade-in">
             <button onClick={() => setIsResearchOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">✕</button>
@@ -989,7 +978,7 @@ function App() {
       )}
 
       {/* EXODUS OVERLAY (Weather Event Style) */}
-      {stats.activeEvent === EconomicEvent.Exodus && (
+      {stats.activeEvent === EconomicEvent.Exodus && !isPhotoMode && (
         <div className="absolute top-0 left-0 w-full z-[100] animate-exodus-slide">
           <div className="bg-red-600 shadow-[0_4px_30px_rgba(220,38,38,0.5)] border-b-2 border-red-400 p-2 text-center overflow-hidden">
             <div className="flex items-center justify-center gap-6 animate-exodus-pulse">

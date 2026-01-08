@@ -10,7 +10,6 @@ interface UIOverlayProps {
   stats: CityStats;
   grid: Grid;
   selectedTool: BuildingType;
-  selectedTool: BuildingType;
   onSelectTool: (type: BuildingType) => void;
   currentGoal: AIGoal | null;
   newsFeed: NewsItem[];
@@ -23,6 +22,7 @@ interface UIOverlayProps {
   onResetCity: () => void;
   neonMode: boolean;
   onToggleNeon: () => void;
+  onTogglePhotoMode: () => void;
   weather: WeatherType;
   activeDisaster: ActiveDisaster | null;
   onTriggerDisaster: () => void;
@@ -193,7 +193,8 @@ const UIOverlay = ({
   onToggleAi,
   historyLog,
   showHistory,
-  onToggleHistory
+  onToggleHistory,
+  onTogglePhotoMode
 }: UIOverlayProps) => {
 
   const [activeTab, setActiveTab] = useState<'build' | 'stats' | 'events'>('build');
@@ -272,7 +273,34 @@ const UIOverlay = ({
         {/* News Feed Moved Here */}
         <div className="w-96 md:w-[28rem] h-72 bg-slate-950/95 rounded-2xl border-2 border-slate-700 shadow-2xl overflow-hidden flex flex-col">
           <div className="bg-slate-900 px-5 py-3 text-base font-black uppercase tracking-widest text-gray-300 border-b-2 border-slate-700 flex justify-between items-center">
-            <span>City Feed</span>
+            <div className="flex items-center gap-3">
+              <span>City Feed</span>
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <button
+                  onClick={onTogglePhotoMode}
+                  title="Open Photo Mode"
+                  className="bg-slate-800 hover:bg-sky-600 text-white p-1.5 rounded-lg border border-slate-600 hover:border-sky-400 transition-all active:scale-90 shadow-lg group"
+                >
+                  <span className="text-sm group-hover:scale-110 transition-transform inline-block">📸</span>
+                </button>
+
+                <button
+                  onClick={onToggleNeon}
+                  title={neonMode ? "Disable Neon Mode" : "Enable Neon Mode"}
+                  className={`p-1.5 rounded-lg border transition-all active:scale-90 shadow-lg group ${neonMode ? 'bg-fuchsia-900/80 border-fuchsia-400 text-fuchsia-200' : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white'}`}
+                >
+                  <span className="text-sm group-hover:scale-110 transition-transform inline-block">✨</span>
+                </button>
+
+                <button
+                  onClick={onToggleHistory}
+                  title="View History"
+                  className="bg-slate-800 hover:bg-amber-600 text-white p-1.5 rounded-lg border border-slate-600 hover:border-amber-400 transition-all active:scale-90 shadow-lg group"
+                >
+                  <span className="text-sm group-hover:scale-110 transition-transform inline-block">📜</span>
+                </button>
+              </div>
+            </div>
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
           </div>
 
@@ -317,9 +345,9 @@ const UIOverlay = ({
       {/* Top Right: Treasury & Settings */}
       <div className="absolute top-4 right-4 flex flex-col gap-3 items-end pointer-auto">
         <div className="bg-slate-900/95 p-6 rounded-2xl border-2 border-slate-600 shadow-2xl backdrop-blur-xl w-96 md:w-[28rem]">
-          <div className="text-base font-black uppercase tracking-widest text-gray-300 mb-2 border-b-2 border-slate-600 pb-2 flex justify-between">
-            <span>Treasury</span>
-            <span className="text-sm">Day {stats.day}</span>
+          <div className="text-right text-sm mb-2 border-b-2 border-slate-600 pb-2 flex justify-between">
+            <span className="text-gray-300 font-bold uppercase tracking-widest">Reserves</span>
+            <span className="text-gray-400">Day {stats.day}</span>
           </div>
           <div className={`text-5xl font-black font-mono text-right my-4 ${stats.money >= 0 ? 'text-green-400' : 'text-red-500'}`}>
             ${stats.money.toLocaleString()}
@@ -340,45 +368,7 @@ const UIOverlay = ({
 
         </div>
 
-        <div className="flex flex-col gap-2 mt-2">
-          {/* Add History Toggle */}
-          <button onClick={() => setShowHistory(true)} className="w-full bg-amber-900/60 hover:bg-amber-800 text-amber-100 text-[10px] uppercase font-bold py-1 px-2 rounded border border-amber-700 backdrop-blur shadow-lg flex items-center justify-center gap-2">
-            <span>📜</span> View History
-          </button>
 
-          <button onClick={onCycleTax} className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[10px] uppercase font-bold py-1 px-2 rounded border border-slate-600 backdrop-blur">
-            Cycle Tax
-          </button>
-          <div className="flex gap-1">
-            <button onClick={onTakeLoan} className="flex-1 bg-green-900/60 hover:bg-green-800 text-green-100 text-[10px] uppercase font-bold py-1 px-2 rounded border border-green-700 backdrop-blur">
-              Loan (+5k)
-            </button>
-            <button onClick={onRepayLoan} className="flex-1 bg-red-900/60 hover:bg-red-800 text-red-100 text-[10px] uppercase font-bold py-1 px-2 rounded border border-red-700 backdrop-blur">
-              Repay
-            </button>
-          </div>
-          <div className="flex gap-1">
-            <button onClick={onBuyShares} className="flex-1 bg-blue-900/60 hover:bg-blue-800 text-blue-100 text-[10px] uppercase font-bold py-1 px-2 rounded border border-blue-700 backdrop-blur">
-              Buy Stock
-            </button>
-            <button onClick={onSellShares} className="flex-1 bg-yellow-900/60 hover:bg-yellow-800 text-yellow-100 text-[10px] uppercase font-bold py-1 px-2 rounded border border-yellow-700 backdrop-blur">
-              Sell Stock
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={onToggleNeon}
-          className={`
-            mt-2 px-3 py-1.5 rounded-lg border font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg backdrop-blur-md
-            ${neonMode
-              ? 'bg-fuchsia-900/80 border-fuchsia-500 text-fuchsia-200 shadow-[0_0_15px_rgba(232,121,249,0.5)]'
-              : 'bg-slate-900/80 border-slate-600 text-slate-400 hover:bg-slate-800'
-            }
-          `}
-        >
-          {neonMode ? 'Neon Mode: ON' : 'Neon Mode: OFF'}
-        </button>
 
 
       </div>

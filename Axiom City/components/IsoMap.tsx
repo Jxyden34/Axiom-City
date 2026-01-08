@@ -1230,9 +1230,10 @@ const IsoMap: React.FC<IsoMapProps> = ({ grid, onTileClick, hoveredTool, populat
   return (
     <div className="absolute inset-0 bg-sky-900 touch-none">
       <Canvas
+        id="game-canvas"
         shadows={{ type: THREE.PCFSoftShadowMap }}
         dpr={[1, 1.5]}
-        gl={{ antialias: true }}
+        gl={{ antialias: true, preserveDrawingBuffer: true }}
       >
         <OrthographicCamera makeDefault zoom={45} position={[20, 20, 20]} near={-100} far={200} />
         <MapControls
@@ -1261,20 +1262,22 @@ const IsoMap: React.FC<IsoMapProps> = ({ grid, onTileClick, hoveredTool, populat
 
           {true ? (
             // Quality Mode: Render individual detailed components
-            grid.map((row) => row.map((tile) => {
-              if (tile.buildingType === BuildingType.None || tile.buildingType === BuildingType.Road || tile.buildingType === BuildingType.Water) return null;
+            grid.flatMap((row) => row.map((tile) => {
+              if (tile.buildingType === BuildingType.None || tile.buildingType === BuildingType.Water) return null;
               const [wx, _, wz] = gridToWorld(tile.x, tile.y);
               const config = BUILDINGS[tile.buildingType];
+              if (!config) return null;
+
               return (
                 <DetailedBuilding
-                  key={tile.x + '-' + tile.y}
+                  key={`${tile.x}-${tile.y}-${tile.buildingType}`}
                   type={tile.buildingType}
                   baseColor={config.color}
                   heightVar={1.0}
                   rotation={0}
                   hasRoadAccess={tile.hasRoadAccess}
                   isHovered={hoveredTile?.x === tile.x && hoveredTile?.y === tile.y}
-                  position={[wx, -0.5, wz]} // Align with GroundSystem
+                  position={[wx, -0.4, wz]} // Align with GroundSystem top (-0.4)
                   onClick={() => onTileClick(tile.x, tile.y)}
                   weather={weather}
                 />

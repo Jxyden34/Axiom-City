@@ -1,5 +1,5 @@
 import { CityStats, Grid, BuildingType, AIAction, AIGoal, NewsItem } from "../types";
-import { BUILDINGS } from "../constants";
+import { BUILDINGS, GRID_SIZE } from "../constants";
 // import { generateAsciiMap } from "../utils/gridUtils";
 
 const API_KEY = import.meta.env.VITE_OPENWEBUI_API_KEY;
@@ -190,32 +190,43 @@ const getAvailableMoves = (grid: Grid, stats: CityStats, forbidden: { x: number,
     const validTiles: { x: number, y: number }[] = [];
     const forbiddenSet = new Set(forbidden.map(f => `${f.x},${f.y}`));
 
-    // 1. Scan for valid EMPTY LAND
-    grid.forEach(row => row.forEach(tile => {
-        if (tile.buildingType === BuildingType.None && !forbiddenSet.has(`${tile.x},${tile.y}`)) {
-            validTiles.push({ x: tile.x, y: tile.y });
+    // 1. Calculate playable bounds (respecting Fog of War)
+    const center = Math.floor(GRID_SIZE / 2); // 22
+    const halfSize = Math.floor(stats.unlockedGridSize / 2);
+    const minBounds = center - halfSize;
+    const maxBounds = center + halfSize;
+
+    // 2. Scan tiles within the unlocked area
+    for (let y = minBounds; y <= maxBounds; y++) {
+        for (let x = minBounds; x <= maxBounds; x++) {
+            const tile = grid[y]?.[x];
+            if (!tile) continue;
+
+            // Only consider empty land or water tiles
+            const isEmpty = tile.buildingType === BuildingType.None || tile.buildingType === BuildingType.Water;
+            if (isEmpty && !forbiddenSet.has(`${x},${y}`)) {
+                validTiles.push({ x, y });
+            }
         }
-    }));
+    }
 
-    // 2. Pick a random subset of tiles (e.g. 5) to keep prompt size manageable
-    // We shuffle a copy of the array
-    const selectedTiles = [...validTiles].sort(() => 0.5 - Math.random()).slice(0, 5);
-
+    // 3. Pick a random subset of tiles (e.g. 8) to keep prompt size manageable
+    const selectedTiles = [...validTiles].sort(() => 0.5 - Math.random()).slice(0, 8);
     const moves: string[] = [];
 
-    // 3. For each tile, offer affordable buildings (excluding Water/Bridge for simplicity)
-    const affordableBuildings = Object.values(BUILDINGS).filter(b =>
-        b.type !== BuildingType.None &&
-        b.type !== BuildingType.Water &&
-        b.type !== BuildingType.Bridge &&
-        b.cost <= stats.money
-    );
-
-    if (affordableBuildings.length === 0) return [];
-
     selectedTiles.forEach(tile => {
-        affordableBuildings.forEach(b => {
-            // Strings like "BUILD Residential 12 5"
+        const isWater = grid[tile.y][tile.x].buildingType === BuildingType.Water;
+
+        // 4. Offer appropriate buildings for the tile type (Bridge for water, others for land)
+        const appropriateBuildings = Object.values(BUILDINGS).filter(b => {
+            if (b.type === BuildingType.None || b.type === BuildingType.Water) return false;
+            // Bridge rules
+            if (isWater) return b.type === BuildingType.Bridge;
+            if (!isWater) return b.type !== BuildingType.Bridge;
+            return false;
+        }).filter(b => b.cost <= stats.money);
+
+        appropriateBuildings.forEach(b => {
             moves.push(`BUILD ${b.type} ${tile.x} ${tile.y}`);
         });
     });
