@@ -359,9 +359,21 @@ Financial Status: Profit ${context.profit} (${context.profit < 0 ? 'DEFICIT' : '
 
 **CURRENT STRATEGY PHASE**: ${phase}
 **PRIMARY DIRECTIVE**: ${priorityDirective}
+**SOLVENCY STATE**: ${stats.money > 0 ? "SOLVENT (Funds Available)" : "BANKRUPT (Critical Debt)"} - Do not hallucinate bankruptcy if Solvent.
 **BALANCE HEURISTIC**:
-- If Jobs > Population: **BUILD RESIDENTIAL/APARTMENTS**. You need workers!
+- If Jobs >= Population: **STOP BUILDING JOBS**. Build **RESIDENTIAL** (Housing). We have enough jobs!
 - If Population > Jobs: **BUILD COMMERCIAL/INDUSTRIAL**. You need jobs!
+- If Population > 100: **BUILD Hospitals**. Keep them healthy!
+- If Pollution > 50: **BUILD PARKS**. Clean the air!
+- If Education < 20: **BUILD SCHOOLS**. People need to learn!
+- If Education > 40: **BUILD UNIVERSITIES**. Higher learning!
+- If Education > 60: **BUILD RESEARCH CENTRE**. Unlock tech!
+- If Education > 80: **BUILD SPACE PORT**. Go to Mars!
+- If Crime Rate > 10: **BUILD POLICE**. Safety is low!
+- If Happiness < 60: **BUILD STADIUM**. Entertain them!
+- If Happiness > 40: **BUILD CASINO**. High risk, high fun!
+- If Happiness > 60: **BUILD MEGA MALL**. Ultimate consumerism!
+
 
 **AVAILABLE MOVES**:
 ${movesList}

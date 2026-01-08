@@ -92,6 +92,8 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     let rawCrime = 0;
     let rawPollution = 0;
     let stadiums = 0;
+    let casinos = 0;
+    let megaMalls = 0;
     let unconnectedCount = 0;
 
     // Acid Rain Damage Counter
@@ -160,6 +162,8 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
                 }
 
                 if (tile.buildingType === BuildingType.Stadium) stadiums++;
+                if (tile.buildingType === BuildingType.Casino) casinos++;
+                if (tile.buildingType === BuildingType.MegaMall) megaMalls++;
 
                 // Road Access Penalty Tracker REMOVED
                 // if (tile.buildingType !== BuildingType.Road && tile.buildingType !== BuildingType.Water && !connected) {
@@ -228,7 +232,10 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     // Growth factors
     const educationLevel = Math.min(100, schools * 15); // 0 base + 15 per school
     // Safety heavily impacted by Crime Rate now
-    const safetyLevel = Math.max(0, 100 - newStats.crimeRate * 2);
+    const safetyLevel = Math.max(0, 100 - newStats.crimeRate); // Reduced penalty from 2x to 1x
+
+    // DEBUG LOGGING
+    console.log(`[SIMULATION] Schools: ${schools}, Police: ${police}, Crime: ${newStats.crimeRate}, Safety: ${safetyLevel}`);
 
     newStats.education = educationLevel;
     newStats.safety = safetyLevel;
@@ -465,6 +472,12 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
 
     // Stadium: Huge Happiness Boost
     if (stadiums > 0) baseHappiness += 15;
+
+    // Casino: Fun but costly? (Just fun for now)
+    if (casinos > 0) baseHappiness += 10;
+
+    // Mega Mall: Shopping Happiness
+    if (megaMalls > 0) baseHappiness += 15;
 
     // Pollution Penalty (Local & Global)
     // 1. Global Smog Penalty
