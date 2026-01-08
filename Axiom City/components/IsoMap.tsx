@@ -1074,21 +1074,26 @@ const DisasterManager = ({ activeDisaster }: { activeDisaster: ActiveDisaster | 
 
 
 const WeatherEffects = ({ weather }: { weather: WeatherType }) => {
-  if (weather === WeatherType.Clear) return null;
+  if (weather === WeatherType.Clear || weather === WeatherType.Fog || weather === WeatherType.Heatwave) return null;
 
-  const count = (weather === WeatherType.Rain || weather === WeatherType.AcidRain) ? 1000 : 500;
+  const isRainy = weather === WeatherType.Rain || weather === WeatherType.AcidRain || weather === WeatherType.Thunderstorm;
+  const isSnowy = weather === WeatherType.Snow;
+  const isSandy = weather === WeatherType.Sandstorm;
+  const isMeteors = weather === WeatherType.MeteorShower;
+  const isToxic = weather === WeatherType.ToxicSmog;
+  const isStardust = weather === WeatherType.Stardust;
+  const isAurora = weather === WeatherType.Aurora;
+
+  const count = (isRainy || isSandy || isToxic) ? 1500 : 400;
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const flashRef = useRef<THREE.DirectionalLight>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   // Initialize particles
   useEffect(() => {
     if (!meshRef.current) return;
     for (let i = 0; i < count; i++) {
-      dummy.position.set(
-        getRandomRange(-20, 20),
-        getRandomRange(0, 20),
-        getRandomRange(-20, 20)
-      );
+      dummy.position.set(getRandomRange(-30, 30), getRandomRange(0, 30), getRandomRange(-30, 30));
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
     }
@@ -1097,38 +1102,88 @@ const WeatherEffects = ({ weather }: { weather: WeatherType }) => {
 
   useFrame((state, delta) => {
     if (!meshRef.current) return;
-    const speed = (weather === WeatherType.Snow) ? 2 : 15;
+
+    // Falling speed
+    let speed = 15;
+    if (isSnowy) speed = 2;
+    if (isSandy) speed = 8;
+    if (isMeteors) speed = 4;
+    if (isToxic) speed = 1;
+    if (isStardust) speed = 0.5;
+    if (isAurora) speed = 0.2;
 
     for (let i = 0; i < count; i++) {
       meshRef.current.getMatrixAt(i, dummy.matrix);
-      dummy.position.setFromMatrixPosition(dummy.matrix); // extract pos
+      dummy.position.setFromMatrixPosition(dummy.matrix);
 
       dummy.position.y -= speed * delta;
-      if (weather === WeatherType.Snow) {
-        dummy.position.x += Math.sin(state.clock.elapsedTime + i) * 0.02;
+
+      // Horizontal drift & Patterns
+      if (isSnowy) dummy.position.x += Math.sin(state.clock.elapsedTime + i) * 0.02;
+      if (isSandy || isToxic) {
+        dummy.position.x += (isSandy ? 10 : 2) * delta;
+        dummy.position.z += Math.cos(state.clock.elapsedTime * 0.5 + i) * 0.1;
+      }
+      if (isMeteors) {
+        dummy.position.x += 2 * delta;
+        dummy.position.z += 2 * delta;
+      }
+      if (isAurora) {
+        dummy.position.x += Math.sin(state.clock.elapsedTime * 0.3 + i * 0.1) * 0.1;
+        dummy.position.z += Math.cos(state.clock.elapsedTime * 0.3 + i * 0.1) * 0.1;
       }
 
-      if (dummy.position.y < 0) {
-        dummy.position.y = 20;
-        dummy.position.x = getRandomRange(-20, 20);
-        dummy.position.z = getRandomRange(-20, 20);
+      // Reset
+      if (dummy.position.y < 0 || dummy.position.x > 30 || dummy.position.x < -30 || dummy.position.z > 30 || dummy.position.z < -30) {
+        dummy.position.y = 30;
+        dummy.position.x = getRandomRange(-30, 30);
+        dummy.position.z = getRandomRange(-30, 30);
       }
 
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
     }
     meshRef.current.instanceMatrix.needsUpdate = true;
+
+    // Flash Logic (Thunder / Blood Moon Pulsing)
+    if (flashRef.current) {
+      if (weather === WeatherType.Thunderstorm) {
+        if (Math.random() > 0.99) flashRef.current.intensity = 15 + Math.random() * 20;
+        else flashRef.current.intensity *= 0.85;
+      } else if (weather === WeatherType.BloodMoon) {
+        flashRef.current.intensity = 5 + Math.sin(state.clock.elapsedTime * 2) * 2;
+      }
+    }
   });
 
-  const color = weather === WeatherType.AcidRain ? '#a3e635' : (weather === WeatherType.Snow ? '#ffffff' : '#93c5fd');
-  const size = weather === WeatherType.Snow ? 0.1 : 0.05;
-  const height = weather === WeatherType.Snow ? 0.1 : 0.5;
+  const color =
+    weather === WeatherType.AcidRain ? '#a3e635' :
+      isSnowy ? '#ffffff' :
+        isSandy ? '#ea580c' :
+          isMeteors ? '#fde047' :
+            isToxic ? '#111827' :
+              isStardust ? '#f8fafc' :
+                isAurora ? '#22d3ee' :
+                  weather === WeatherType.Thunderstorm ? '#94a3b8' : '#93c5fd';
+
+  const size = isSnowy ? 0.1 : (isSandy ? 0.03 : (isMeteors ? 0.08 : (isStardust ? 0.05 : 0.04)));
+  const height = isSnowy ? 0.1 : (isMeteors ? 0.08 : (isSandy ? 0.03 : (isAurora ? 2 : 0.6)));
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
-      <boxGeometry args={[size, height, size]} />
-      <meshBasicMaterial color={color} transparent opacity={0.6} />
-    </instancedMesh>
+    <>
+      {(weather === WeatherType.Thunderstorm || weather === WeatherType.BloodMoon) && (
+        <directionalLight
+          ref={flashRef}
+          position={[10, 50, 10]}
+          color={weather === WeatherType.BloodMoon ? "#ef4444" : "#e0f2fe"}
+          intensity={0}
+        />
+      )}
+      <instancedMesh key={count} ref={meshRef} args={[undefined, undefined, count]}>
+        {(isMeteors || isStardust) ? <sphereGeometry args={[size, 4, 4]} /> : <boxGeometry args={[size, height, size]} />}
+        <meshBasicMaterial color={color} transparent opacity={isSandy || isToxic ? 0.4 : (isAurora ? 0.2 : 0.6)} />
+      </instancedMesh>
+    </>
   );
 }
 

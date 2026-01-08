@@ -30,42 +30,64 @@ export const DetailedBuilding = React.memo(({ type, baseColor, heightVar, rotati
     const content = useMemo(() => {
         const common = { castShadow: true, receiveShadow: true };
         const isSnowing = weather === WeatherType.Snow;
-        const isRaining = weather === WeatherType.Rain;
+        const isRaining = weather === WeatherType.Rain || weather === WeatherType.Thunderstorm;
         const isAcidRain = weather === WeatherType.AcidRain;
+        const isSandstorm = weather === WeatherType.Sandstorm;
+        const isHeatwave = weather === WeatherType.Heatwave;
+        const isToxicSmog = weather === WeatherType.ToxicSmog;
+        const isBloodMoon = weather === WeatherType.BloodMoon;
+        const isAurora = weather === WeatherType.Aurora;
+        const isStardust = weather === WeatherType.Stardust;
 
         // Reactive Materials
         const concreteMat = new THREE.MeshStandardMaterial({
-            color: isSnowing ? '#cbd5e1' : (isAcidRain ? '#4d7c0f' : '#8899a6'),
-            roughness: isRaining ? 0.2 : 0.8,
+            color: isSnowing ? '#cbd5e1' :
+                isAcidRain ? '#4d7c0f' :
+                    isSandstorm ? '#92400e' :
+                        isToxicSmog ? '#111827' : // Soot covered
+                            isBloodMoon ? '#450a0a' : // Bloody dark
+                                isHeatwave ? '#94a3b8' : '#8899a6',
+            roughness: isRaining ? 0.2 : (isHeatwave ? 0.9 : 0.8),
             metalness: isRaining ? 0.6 : 0
         });
 
         const metalMat = new THREE.MeshStandardMaterial({
-            color: isSnowing ? '#e2e8f0' : (isAcidRain ? '#365314' : '#475569'),
+            color: isSnowing ? '#e2e8f0' :
+                isAcidRain ? '#365314' :
+                    isSandstorm ? '#78350f' :
+                        isToxicSmog ? '#020617' :
+                            isBloodMoon ? '#7f1d1d' :
+                                isHeatwave ? '#475569' : '#475569',
             roughness: isRaining ? 0.1 : 0.3,
             metalness: isRaining ? 0.9 : 0.8
         });
 
         const mat = new THREE.MeshStandardMaterial({
-            color: baseColor,
+            color: isHeatwave ? '#ea580c' : (isBloodMoon ? '#991b1b' : baseColor),
             roughness: isRaining ? 0.2 : 0.7,
             metalness: isRaining ? 0.6 : 0.1,
-            emissive: isAcidRain ? '#4d7c0f' : '#000000',
-            emissiveIntensity: isAcidRain ? 0.3 : 0
+            emissive: isAcidRain ? '#4d7c0f' :
+                (isHeatwave ? '#7c2d12' :
+                    (isBloodMoon ? '#7f1d1d' :
+                        (isStardust ? '#cbd5e1' : '#000000'))),
+            emissiveIntensity: isAcidRain ? 0.3 : (isHeatwave || isBloodMoon ? 0.4 : (isStardust ? 0.2 : 0))
         });
 
         const roofMat = new THREE.MeshStandardMaterial({
-            color: isSnowing ? '#ffffff' : (isAcidRain ? '#1a2e05' : '#374151'),
+            color: isSnowing ? '#ffffff' :
+                isAcidRain ? '#1a2e05' :
+                    isToxicSmog ? '#000000' :
+                        isSandstorm ? '#451a03' : '#374151',
             roughness: isSnowing ? 0.9 : 0.5
         });
 
         const matDark = new THREE.MeshStandardMaterial({
-            color: isSnowing ? '#94a3b8' : '#111827',
+            color: isSnowing ? '#94a3b8' : (isSandstorm ? '#1e1b4b' : '#111827'),
             roughness: isRaining ? 0.1 : 0.8
         });
 
         const glassMat = new THREE.MeshStandardMaterial({
-            color: isAcidRain ? '#4d7c0f' : '#60a5fa',
+            color: isAcidRain ? '#4d7c0f' : (isBloodMoon ? '#7f1d1d' : '#60a5fa'),
             roughness: isRaining ? 0.05 : 0.1,
             metalness: isRaining ? 1.0 : 0.9,
             opacity: 0.8,
@@ -73,14 +95,14 @@ export const DetailedBuilding = React.memo(({ type, baseColor, heightVar, rotati
         });
 
         const emissiveCyan = new THREE.MeshStandardMaterial({
-            color: isAcidRain ? '#84cc16' : '#22d3ee',
-            emissive: isAcidRain ? '#84cc16' : '#22d3ee',
-            emissiveIntensity: isAcidRain ? 0.5 : 2
+            color: isAcidRain ? '#84cc16' : (isAurora ? '#a5f3fc' : (isBloodMoon ? '#ef4444' : '#22d3ee')),
+            emissive: isAcidRain ? '#84cc16' : (isAurora ? '#a5f3fc' : (isBloodMoon ? '#ef4444' : '#22d3ee')),
+            emissiveIntensity: isAcidRain ? 0.5 : (isAurora ? 3 : 2)
         });
 
         const emissivePink = new THREE.MeshStandardMaterial({
-            color: isAcidRain ? '#a855f7' : '#e879f9',
-            emissive: isAcidRain ? '#a855f7' : '#e879f9',
+            color: isAcidRain ? '#a855f7' : (isAurora ? '#e879f9' : (isBloodMoon ? '#7f1d1d' : '#e879f9')),
+            emissive: isAcidRain ? '#a855f7' : (isAurora ? '#e879f9' : (isBloodMoon ? '#7f1d1d' : '#e879f9')),
             emissiveIntensity: isAcidRain ? 0.5 : 2
         });
 

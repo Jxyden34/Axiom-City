@@ -125,7 +125,21 @@ const CityStatusPanel = ({ stats }: { stats: CityStats }) => (
   <div className="bg-slate-900/95 p-6 rounded-2xl border-2 border-slate-600 shadow-2xl backdrop-blur-xl w-96 md:w-[28rem]">
     <div className="text-base font-black uppercase tracking-widest text-gray-300 mb-5 border-b-2 border-slate-600 pb-2">City Status</div>
     <div className="space-y-1.5">
-      <StatusRow label="Population" value={stats.population.toLocaleString()} color="text-cyan-300" />
+      <StatusRow label="Population" value={(stats.population || 0).toLocaleString()} color="text-cyan-300" />
+      <div className="flex gap-2 justify-between px-2 mb-2 bg-slate-800/40 rounded-lg py-1">
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Kids</span>
+          <span className="text-sm font-mono text-cyan-200">{stats.demographics?.children || 0}</span>
+        </div>
+        <div className="flex flex-col items-center border-x border-slate-700 px-4">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Adults</span>
+          <span className="text-sm font-mono text-cyan-200">{stats.demographics?.adults || 0}</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Snrs</span>
+          <span className="text-sm font-mono text-cyan-200">{stats.demographics?.seniors || 0}</span>
+        </div>
+      </div>
       <StatusRow label="Happiness" value={`${Math.round(stats.happiness)}%`} color={stats.happiness > 80 ? 'text-green-400' : stats.happiness > 40 ? 'text-yellow-400' : 'text-red-500'} />
       <StatusRow label="Education" value={`${Math.round(stats.education)}%`} color="text-blue-300" />
       <StatusRow label="Safety" value={`${Math.round(stats.safety)}%`} color="text-indigo-300" />
@@ -360,7 +374,15 @@ const UIOverlay = ({
                   weather === WeatherType.Rain ? '🌧️' :
                     weather === WeatherType.Snow ? '🌨️' :
                       weather === WeatherType.Fog ? '🌫️' :
-                        weather === WeatherType.AcidRain ? '🧪' : '❓'}
+                        weather === WeatherType.AcidRain ? '🧪' :
+                          weather === WeatherType.Thunderstorm ? '⚡' :
+                            weather === WeatherType.Sandstorm ? '🏜️' :
+                              weather === WeatherType.Heatwave ? '🌡️' :
+                                weather === WeatherType.MeteorShower ? '🌠' :
+                                  weather === WeatherType.Aurora ? '🌌' :
+                                    weather === WeatherType.BloodMoon ? '🌑' :
+                                      weather === WeatherType.ToxicSmog ? '💨' :
+                                        weather === WeatherType.Stardust ? '✨' : '❓'}
               </span>
               <span className="text-sm font-mono font-bold text-white">{weather}</span>
             </div>

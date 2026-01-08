@@ -82,6 +82,7 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     let housingCapacity = 0;
     let serviceUpkeep = 0;
 
+    let totalJobs = 0;
     let commJobs = 0;
     let indJobs = 0;
 
@@ -168,15 +169,17 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
                 }
 
                 if (config.popGen > 0) housingCapacity += config.popGen;
+                if (config.jobs > 0) {
+                    totalJobs += config.jobs;
+                    if (tile.buildingType === BuildingType.Commercial) commJobs += config.jobs;
+                    if (tile.buildingType === BuildingType.Industrial) indJobs += config.jobs;
+                }
 
-                // Add Crime & Pollution (Calculated every tick for stats, but logic usually stable)
+                // Add Crime & Pollution
                 if (config.crime) rawCrime += config.crime;
                 if (config.pollution) rawPollution += config.pollution;
             }
         }
-
-        if (tile.buildingType === BuildingType.Commercial) commJobs += 5;
-        if (tile.buildingType === BuildingType.Industrial) indJobs += 8;
     }));
 
     // Apply Acid Rain Repair Costs
@@ -224,11 +227,10 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     // If rawCrime < 0 (Excess security), we clamp to 0.
 
     // Security Score (0-100) for UI
-    // Rough calc: (Police * 25) / (Population / 10 + 1) * 100
-    // Actually simplicity is better: Security is inversely proportional to Crime Rate.
     newStats.security = Math.max(0, 100 - newStats.crimeRate);
 
-    const totalJobs = commJobs + indJobs;
+    // const totalJobs = ... (already calculated in loop)
+
 
     // 2. Population Dynamics (Aging)
 
@@ -250,16 +252,30 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
         newStats.demographics.seniors;
 
     // ------------------------------------
-    // Births (slow, happiness-driven) - DAILY ONLY
+    // Births & Immigration - DAILY ONLY
     // ------------------------------------
     if (incrementDay && totalPop < housingCapacity) {
-        const birthChance = 0.02 * happinessFactor;
-        const births = Math.floor(newStats.demographics.adults * birthChance);
-        newStats.demographics.children += births;
+        // Births: Chance scales with adults and happiness
+        const birthProbability = 0.05 * happinessFactor;
+        const potentialBirths = Math.max(1, Math.floor(newStats.demographics.adults * 0.01));
+        if (Math.random() < birthProbability) {
+            newStats.demographics.children += potentialBirths;
+        }
 
-        // Immigration
-        if (totalPop < 50) {
-            newStats.demographics.adults += 2; // Small base immigration for tiny cities
+        // --- DYNAMIC IMMIGRATION ---
+        // 1. Job Vacancy Pull
+        const vacancies = totalJobs - newStats.demographics.adults;
+        if (vacancies > 0) {
+            const pullFactor = 0.2 * happinessFactor; // 20% of vacancies filled per day at max happiness
+            const immigrants = Math.max(1, Math.floor(vacancies * pullFactor));
+            if (Math.random() < 0.8) { // 80% chance for some immigration if jobs exist
+                newStats.demographics.adults += immigrants;
+            }
+        }
+
+        // 2. Base Drip (Small cities always grow slightly if happy)
+        if (totalPop < 200 && Math.random() < 0.3 * happinessFactor) {
+            newStats.demographics.adults += 1;
         }
     }
 
@@ -275,17 +291,28 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
 
     // Aging - DAILY ONLY
     if (incrementDay) {
-        const ageUpChildChance = 0.05 * schoolFactor;
-        const ageUpAdultChance = 0.02;
+        // Stochastic Aging: Use probability instead of floored counts to avoid stagnation at low pops
+        const baseChildAgeUp = 0.05 * schoolFactor;
+        const baseAdultAgeUp = 0.02;
         const deathChance = 0.05 / (1 + hospitals);
 
-        const agingChildren = Math.floor(newStats.demographics.children * ageUpChildChance);
-        newStats.demographics.children -= agingChildren;
-        newStats.demographics.adults += agingChildren;
+        // Children -> Adults
+        if (newStats.demographics.children > 0) {
+            const agingAmount = Math.max(1, Math.floor(newStats.demographics.children * baseChildAgeUp));
+            if (Math.random() < baseChildAgeUp * 2) { // Bonus chance
+                newStats.demographics.children -= agingAmount;
+                newStats.demographics.adults += agingAmount;
+            }
+        }
 
-        const agingAdults = Math.floor(newStats.demographics.adults * ageUpAdultChance);
-        newStats.demographics.adults -= agingAdults;
-        newStats.demographics.seniors += agingAdults;
+        // Adults -> Seniors
+        if (newStats.demographics.adults > 0) {
+            const agingAmount = Math.max(1, Math.floor(newStats.demographics.adults * baseAdultAgeUp));
+            if (Math.random() < baseAdultAgeUp * 2) {
+                newStats.demographics.adults -= agingAmount;
+                newStats.demographics.seniors += agingAmount;
+            }
+        }
 
         // Crime Deaths: If crime is high (>50), seniors die faster.
         const crimeDeathFactor = newStats.crimeRate > 50 ? 0.05 : 0;
@@ -425,6 +452,14 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     // 5. Happiness Calculation
     let baseHappiness = 100;
     baseHappiness -= (newStats.taxRate * 200);
+
+    // Weather Happiness Modifiers
+    if (weather === WeatherType.Aurora) baseHappiness += 20; // Celestial joy
+    if (weather === WeatherType.Stardust) baseHappiness += 10;
+    if (weather === WeatherType.BloodMoon) baseHappiness -= 15; // Dread
+    if (weather === WeatherType.ToxicSmog) baseHappiness -= 25; // Sickness
+    if (weather === WeatherType.Thunderstorm) baseHappiness -= 5;
+
     // Parks help, but Pollution hurts
     baseHappiness += Math.min(20, parks * 2);
 

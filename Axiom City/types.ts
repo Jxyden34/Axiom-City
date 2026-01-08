@@ -45,7 +45,15 @@ export enum WeatherType {
   Rain = 'RAIN',
   Snow = 'SNOW',
   AcidRain = 'ACID_RAIN',
-  Fog = 'FOG'
+  Fog = 'FOG',
+  Thunderstorm = 'THUNDERSTORM',
+  Sandstorm = 'SANDSTORM',
+  Heatwave = 'HEATWAVE',
+  MeteorShower = 'METEOR_SHOWER',
+  Aurora = 'AURORA',
+  BloodMoon = 'BLOOD_MOON',
+  ToxicSmog = 'TOXIC_SMOG',
+  Stardust = 'STARDUST'
 }
 
 export enum DisasterType {
@@ -73,6 +81,7 @@ export interface BuildingConfig {
   color: string;
   popGen: number;
   incomeGen: number;
+  jobs?: number;
   crime?: number; // + adds crime, - reduces it (Security)
   pollution?: number; // + adds pollution, - reduces it (Cleaning)
   maxAllowed?: number; // Optional limit (e.g. 1 per city)

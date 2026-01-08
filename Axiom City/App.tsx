@@ -525,13 +525,31 @@ function App() {
       // Trigger news
       fetchNews();
 
-      // Weather Cycle (Random change every ~30 ticks)
-      if (Math.random() < 0.03) {
-        const weathers = [WeatherType.Clear, WeatherType.Clear, WeatherType.Rain, WeatherType.Rain, WeatherType.Snow, WeatherType.Fog, WeatherType.AcidRain];
+      // Weather Cycle (Random change every ~25 ticks)
+      if (Math.random() < 0.04) {
+        const weathers = [
+          WeatherType.Clear, WeatherType.Clear, WeatherType.Clear,
+          WeatherType.Rain, WeatherType.Thunderstorm,
+          WeatherType.Snow, WeatherType.Fog,
+          WeatherType.AcidRain, WeatherType.Sandstorm,
+          WeatherType.Heatwave, WeatherType.MeteorShower,
+          WeatherType.Aurora, WeatherType.BloodMoon,
+          WeatherType.ToxicSmog, WeatherType.Stardust
+        ];
         const nextWeather = weathers[Math.floor(Math.random() * weathers.length)];
         setWeather(prev => {
           if (prev !== nextWeather && nextWeather !== WeatherType.Clear) {
-            addNewsItem({ id: Date.now().toString(), text: `Weather Alert: ${nextWeather} incoming.`, type: 'neutral' });
+            const flavorText =
+              nextWeather === WeatherType.MeteorShower ? "Astronomers report a spectacular Meteor Shower!" :
+                nextWeather === WeatherType.Sandstorm ? "Warning: Sandstorm visibility reduction." :
+                  nextWeather === WeatherType.Heatwave ? "Extreme Heatwave alert: Stay hydrated." :
+                    nextWeather === WeatherType.Thunderstorm ? "Severe Thunderstorm warning!" :
+                      nextWeather === WeatherType.Aurora ? "The Sky Shimmers: Aurora Borealis is visible!" :
+                        nextWeather === WeatherType.BloodMoon ? "Total Lunar Eclipse: The Blood Moon rises..." :
+                          nextWeather === WeatherType.ToxicSmog ? "Factory emissions have created a Toxic Smog." :
+                            nextWeather === WeatherType.Stardust ? "The city is passing through a Stardust nebula!" :
+                              `Weather Alert: ${nextWeather} incoming.`;
+            addNewsItem({ id: Date.now().toString(), text: flavorText, type: 'neutral' });
           }
           return nextWeather;
         });

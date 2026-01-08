@@ -47,6 +47,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#60a5fa', // blue-400
     popGen: 0,
     incomeGen: 15,
+    jobs: 5,
   },
   [BuildingType.Industrial]: {
     type: BuildingType.Industrial,
@@ -56,6 +57,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#facc15', // yellow-400
     popGen: 0,
     incomeGen: 40,
+    jobs: 10,
     pollution: 15, // Heavy polluter
     crime: 5,
   },
@@ -77,6 +79,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#fbbf24', // amber-400
     popGen: 0,
     incomeGen: -10, // Upkeep
+    jobs: 5,
     crime: -2, // Education helps?
   },
   [BuildingType.Hospital]: {
@@ -87,6 +90,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#f472b6', // pink-400
     popGen: 0,
     incomeGen: -20, // Upkeep
+    jobs: 15,
   },
   [BuildingType.Police]: {
     type: BuildingType.Police,
@@ -96,6 +100,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#1e40af', // blue-800
     popGen: 0,
     incomeGen: -10, // Upkeep
+    jobs: 10,
     crime: -25, // MAJOR security boost (represented as negative crime in config, or handle as separate prop?) 
     // Wait, let's use 'crime' field as 'crime impact'. Negative means security.
   },
@@ -107,6 +112,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#dc2626', // red-600
     popGen: 0,
     incomeGen: -15, // Upkeep
+    jobs: 8,
     crime: -5, // Minor security
   },
   [BuildingType.GoldMine]: {
@@ -117,6 +123,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: '#fbbf24', // amber-400
     popGen: 0,
     incomeGen: 600,
+    jobs: 25,
     crime: 0,
     pollution: 10,
   },
@@ -166,6 +173,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: "#db2777", // Pink-700
     popGen: 0,
     incomeGen: 300,
+    jobs: 40,
     crime: 30, // MAJOR CRIME SOURCE
   },
   [BuildingType.MegaMall]: {
@@ -176,6 +184,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: "#ec4899", // Pink-500
     popGen: 0,
     incomeGen: 400, // Massive income
+    jobs: 100,
     crime: 10,
     pollution: 5,
     maxAllowed: 1
@@ -188,6 +197,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: "#6366f1", // Indigo-500
     popGen: 0,
     incomeGen: 5000,
+    jobs: 300,
     crime: 5,
     maxAllowed: 1
   },
@@ -199,6 +209,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: "#3b82f6", // Blue-500
     popGen: 0,
     incomeGen: -100, // Expensive upkeep
+    jobs: 50,
     crime: -10,
     maxAllowed: 1
   },
@@ -210,6 +221,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: "#f59e0b", // Amber-500
     popGen: 0,
     incomeGen: 100,
+    jobs: 80,
     crime: 15, // Hooligans
     maxAllowed: 1
   },
@@ -221,6 +233,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     color: "#0ea5e9", // Sky-500
     popGen: 0,
     incomeGen: -5, // Upkeep
+    jobs: 12,
     maxAllowed: 1
   }
 };
