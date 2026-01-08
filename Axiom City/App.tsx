@@ -228,9 +228,14 @@ function App() {
   const [isResearchOpen, setIsResearchOpen] = useState(false);
 
   // Helper to execute actions (USER or AI)
-  const performAction = useCallback((action: string, type: BuildingType | null, x: number, y: number) => {
+  const performAction = useCallback((action: string, type: BuildingType | null, x: number, y: number, researchType?: 'MARS' | 'NAUTICAL' | 'LAND') => {
     const currentGrid = gridRef.current;
     const currentStats = statsRef.current;
+
+    if (action === 'WAIT') return true;
+    if (action === 'RESEARCH' && researchType) {
+      return handleResearch(researchType);
+    }
 
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
 
@@ -561,65 +566,64 @@ function App() {
   }, [gameStarted, weather]);
 
   // --- AI Agent Loop ---
+  const aiLoopIdRef = useRef(0);
   useEffect(() => {
-    if (!gameStarted || !aiEnabled) return;
+    if (!gameStarted || !aiEnabled) {
+      aiLoopIdRef.current++; // Invalidate current loop
+      return;
+    }
+
+    const currentLoopId = ++aiLoopIdRef.current;
 
     const aiLoop = async () => {
-      // Slow down AI thinking
-      await new Promise(r => setTimeout(r, 4000));
-      if (!aiEnabledRef.current) return;
+      // 2s thinking delay
+      await new Promise(r => setTimeout(r, 2000));
 
-      console.log("[AI AGENT] Thinking...");
-      try {
+      while (aiEnabledRef.current && currentLoopId === aiLoopIdRef.current) {
+        console.log(`[AI AGENT] ${currentLoopId} Thinking...`);
+        try {
+          const action = await generateGameAction(statsRef.current, gridRef.current, aiFailuresRef.current);
 
-        // Update: Pass grid to AI for vision
-        const action = await generateGameAction(statsRef.current, gridRef.current, aiFailuresRef.current);
+          if (action && currentLoopId === aiLoopIdRef.current) {
+            console.log(`AI Acting: ${action.action} ${action.buildingType || ''} at ${action.x},${action.y}. Reasoning: ${action.reasoning}`);
 
-        if (action) {
-          if (action.action === 'BUILD' && action.buildingType && action.x !== undefined && action.y !== undefined) {
-            const success = performAction('BUILD', action.buildingType, action.x, action.y);
+            const success = performAction(
+              action.action,
+              action.buildingType || null,
+              action.x || 0,
+              action.y || 0,
+              action.researchType
+            );
+
             if (success) {
               addNewsItem({
                 id: Date.now().toString(),
-                text: action.reasoning || `AI Mayor constructed ${action.buildingType}`,
+                text: action.reasoning || `AI Mayor: ${action.action}`,
                 type: 'neutral'
               });
             } else {
-              console.warn(`[AI AGENT] Move failed: ${action.buildingType} @ ${action.x},${action.y}`);
-              setAiFailures(prev => [...prev, { x: action.x!, y: action.y! }].slice(-20));
-              aiFailuresRef.current.push({ x: action.x, y: action.y });
+              aiFailuresRef.current.push({ x: action.x || 0, y: action.y || 0 });
+              setAiFailures(prev => [...prev, { x: action.x || 0, y: action.y || 0 }].slice(-20));
             }
-          } else if (action.action === 'WAIT') {
-            console.log("[AI AGENT] Waiting...");
-          } else if (action.action === 'DEMOLISH' && action.x !== undefined && action.y !== undefined) {
-            const success = performAction('DEMOLISH', null, action.x, action.y);
-            if (success) {
-              addNewsItem({
-                id: Date.now().toString(),
-                text: action.reasoning || `AI Mayor demolished tile at ${action.x},${action.y}`,
-                type: 'negative'
-              });
-            }
-          } else if (action.action === 'RESEARCH' && action.researchType) {
-            handleResearch(action.researchType);
+
+            setLastAIAction(action);
           }
-
-          setLastAIAction(action);
+        } catch (e) {
+          console.error("[AI AGENT] Loop Error:", e);
         }
-      } catch (e) {
-        console.error("[AI AGENT] Loop Error:", e);
-      }
 
-      // Loop
-      if (aiEnabledRef.current) aiLoop();
+        // Small break between moves
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      console.log(`[AI AGENT] Loop ${currentLoopId} Exited.`);
     };
 
     aiLoop();
 
     return () => {
-      // Cleanup if needed
-    }
-  }, [gameStarted, aiEnabled, performAction, addNewsItem]);
+      aiLoopIdRef.current++; // Cleanup
+    };
+  }, [gameStarted, aiEnabled, performAction, addNewsItem, handleResearch]);
 
   // --- Persistence Cleanup (FORCE RESET) ---
   // User demanded no saving and fresh random maps on reload.

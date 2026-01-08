@@ -1252,7 +1252,6 @@ const Cursor = ({ x, y, color }: { x: number, y: number, color: string }) => {
     <mesh position={[wx, -0.25, wz]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial color={color} transparent opacity={0.4} side={THREE.DoubleSide} depthTest={false} />
-      <Outlines thickness={0.05} color="white" />
     </mesh>
   );
 };
@@ -1277,8 +1276,8 @@ const IsoMap: React.FC<IsoMapProps> = ({ grid, onTileClick, hoveredTool, populat
   const [hoveredTile, setHoveredTile] = useState<{ x: number, y: number } | null>(null);
   const handleHover = useCallback((x: number, y: number) => { setHoveredTile({ x, y }); }, []);
   const handleLeave = useCallback(() => { setHoveredTile(null); }, []);
-  const showPreview = hoveredTile && grid[hoveredTile.y][hoveredTile.x].buildingType === BuildingType.None && hoveredTool !== BuildingType.None;
-  const previewColor = showPreview ? BUILDINGS[hoveredTool].color : 'white';
+  const showPreview = hoveredTile && grid[hoveredTile.y]?.[hoveredTile.x]?.buildingType === BuildingType.None && hoveredTool !== BuildingType.None;
+  const previewColor = showPreview ? BUILDINGS[hoveredTool]?.color || 'white' : 'white';
   const isBulldoze = hoveredTool === BuildingType.None;
   const previewPos = hoveredTile ? gridToWorld(hoveredTile.x, hoveredTile.y) : [0, 0, 0];
 
@@ -1317,23 +1316,27 @@ const IsoMap: React.FC<IsoMapProps> = ({ grid, onTileClick, hoveredTool, populat
 
           {true ? (
             // Quality Mode: Render individual detailed components
-            grid.flatMap((row) => row.map((tile) => {
-              if (tile.buildingType === BuildingType.None || tile.buildingType === BuildingType.Water) return null;
-              const [wx, _, wz] = gridToWorld(tile.x, tile.y);
-              const config = BUILDINGS[tile.buildingType];
+            // Optimizing: Only render if type exists and isn't None/Water
+            grid.flatMap((row, y) => row.map((tile, x) => {
+              const type = tile.buildingType;
+              if (type === BuildingType.None || type === BuildingType.Water) return null;
+
+              const config = BUILDINGS[type];
               if (!config) return null;
+
+              const [wx, _, wz] = gridToWorld(x, y);
 
               return (
                 <DetailedBuilding
-                  key={`${tile.x}-${tile.y}-${tile.buildingType}`}
-                  type={tile.buildingType}
+                  key={`${x}-${y}-${type}`}
+                  type={type}
                   baseColor={config.color}
                   heightVar={1.0}
                   rotation={0}
                   hasRoadAccess={tile.hasRoadAccess}
-                  isHovered={hoveredTile?.x === tile.x && hoveredTile?.y === tile.y}
-                  position={[wx, -0.4, wz]} // Align with GroundSystem top (-0.4)
-                  onClick={() => onTileClick(tile.x, tile.y)}
+                  isHovered={hoveredTile?.x === x && hoveredTile?.y === y}
+                  position={[wx, -0.4, wz] as [number, number, number]}
+                  onClick={() => onTileClick(x, y)}
                   weather={weather}
                 />
               );

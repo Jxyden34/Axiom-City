@@ -111,7 +111,9 @@ export interface CityStats {
   jobs: {
     commercial: number;
     industrial: number;
+    service: number;
     total: number;
+    occupied: number; // New field for clarity
     unemployment: number;
   };
   demographics: {

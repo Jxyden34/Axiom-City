@@ -162,7 +162,21 @@ const CityStatusPanel = ({ stats }: { stats: CityStats }) => (
       <div className="h-px bg-slate-700 my-1.5" />
 
       <StatusRow label="Unemployment" value={`${Math.round(stats.jobs.unemployment * 100)}%`} color={stats.jobs.unemployment < 0.1 ? 'text-green-400' : 'text-red-400'} />
-      <StatusRow label="Jobs" value={stats.jobs.total.toLocaleString()} color="text-orange-300" />
+      <StatusRow label="Jobs" value={`${stats.jobs.occupied || 0} / ${stats.jobs.total.toLocaleString()}`} color="text-orange-300" />
+      <div className="flex gap-2 justify-between px-2 mb-2 bg-slate-800/40 rounded-lg py-1">
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Comm</span>
+          <span className="text-sm font-mono text-orange-200">{stats.jobs.commercial || 0}</span>
+        </div>
+        <div className="flex flex-col items-center border-x border-slate-700 px-4">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Indus</span>
+          <span className="text-sm font-mono text-orange-200">{stats.jobs.industrial || 0}</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] text-gray-500 uppercase font-bold">Svc</span>
+          <span className="text-sm font-mono text-orange-200">{stats.jobs.service || 0}</span>
+        </div>
+      </div>
       <StatusRow label="Tax Rate" value={`${Math.round(stats.taxRate * 100)}%`} color="text-yellow-200" />
 
       <div className="h-px bg-slate-700 my-1.5" />

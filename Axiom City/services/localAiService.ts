@@ -50,7 +50,7 @@ const callLocalAI = async (prompt: string, systemPrompt: string = "You are a hel
             logToFile(`Sending request to: ${API_URL}/chat/completions (Attempt ${i + 1})`);
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for responsiveness
 
             const response = await fetch(`${API_URL}/chat/completions`, {
                 method: 'POST',
@@ -59,7 +59,7 @@ const callLocalAI = async (prompt: string, systemPrompt: string = "You are a hel
                     'Authorization': `Bearer ${API_KEY}`
                 },
                 body: JSON.stringify({
-                    model: "gemma3:27b", // Default to local model
+                    model: "gemma3:27b", // Updated to likely available model
                     messages: [
                         { role: "system", content: systemPrompt },
                         { role: "user", content: prompt }
@@ -210,23 +210,24 @@ const getAvailableMoves = (grid: Grid, stats: CityStats, forbidden: { x: number,
         }
     }
 
-    // 3. Pick a random subset of tiles (e.g. 8) to keep prompt size manageable
-    const selectedTiles = [...validTiles].sort(() => 0.5 - Math.random()).slice(0, 8);
+    // 3. Pick a random subset of tiles (e.g. 5) to keep prompt size manageable
+    const selectedTiles = [...validTiles].sort(() => 0.5 - Math.random()).slice(0, 5);
     const moves: string[] = [];
 
     selectedTiles.forEach(tile => {
         const isWater = grid[tile.y][tile.x].buildingType === BuildingType.Water;
 
-        // 4. Offer appropriate buildings for the tile type (Bridge for water, others for land)
-        const appropriateBuildings = Object.values(BUILDINGS).filter(b => {
+        // 4. Offer a VARIETY of appropriate buildings (not all, to save tokens)
+        const candidates = Object.values(BUILDINGS).filter(b => {
             if (b.type === BuildingType.None || b.type === BuildingType.Water) return false;
-            // Bridge rules
             if (isWater) return b.type === BuildingType.Bridge;
             if (!isWater) return b.type !== BuildingType.Bridge;
             return false;
         }).filter(b => b.cost <= stats.money);
 
-        appropriateBuildings.forEach(b => {
+        // Pick 3 random affordable buildings for this tile
+        const subset = candidates.sort(() => 0.5 - Math.random()).slice(0, 3);
+        subset.forEach(b => {
             moves.push(`BUILD ${b.type} ${tile.x} ${tile.y}`);
         });
     });
@@ -274,20 +275,19 @@ export const generateGameAction = async (stats: CityStats, grid: Grid, recentFai
 
     let lowMoneyWarning = "";
 
-    if (stats.money < 1500) {
-        if (commCount < 6) {
+    if (stats.money < 800) {
+        if (commCount < 4) {
             // Force Commercial Builds Only
             validMoves = validMoves.filter(m => m.includes(BuildingType.Commercial));
-            lowMoneyWarning = `CRITICAL: MONEY LOW. YOU MUST BUILD COMMERCIAL (${commCount}/6 BUILT).`;
+            lowMoneyWarning = `CRITICAL: MONEY LOW. YOU MUST BUILD COMMERCIAL (${commCount}/4 BUILT).`;
 
-            // If no commercial moves possible (e.g. costs too much?), we fallback to wait logic below
             if (validMoves.length === 0) {
                 lowMoneyWarning += " (CANNOT AFFORD OR PLACE COMMERCIAL - WAITING)";
             }
         } else {
             // TARGET MET, but Money still low -> FORCE WAIT
             validMoves = [];
-            lowMoneyWarning = `CRITICAL: SAVING MODE. COMMERCIAL TARGET (${commCount}/6) MET. WAITING FOR FUNDS > $1500.`;
+            lowMoneyWarning = `CRITICAL: SAVING MODE. COMMERCIAL TARGET (${commCount}/4) MET. WAITING FOR FUNDS > $800.`;
         }
     }
 
@@ -359,6 +359,9 @@ Financial Status: Profit ${context.profit} (${context.profit < 0 ? 'DEFICIT' : '
 
 **CURRENT STRATEGY PHASE**: ${phase}
 **PRIMARY DIRECTIVE**: ${priorityDirective}
+**BALANCE HEURISTIC**:
+- If Jobs > Population: **BUILD RESIDENTIAL/APARTMENTS**. You need workers!
+- If Population > Jobs: **BUILD COMMERCIAL/INDUSTRIAL**. You need jobs!
 
 **AVAILABLE MOVES**:
 ${movesList}

@@ -18,6 +18,7 @@ export const INITIAL_STATS: CityStats = {
     jobs: {
         commercial: 0,
         industrial: 0,
+        service: 0,
         total: 0,
         unemployment: 0
     },
@@ -85,10 +86,13 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     let totalJobs = 0;
     let commJobs = 0;
     let indJobs = 0;
+    let serviceJobs = 0;
 
     // Accumulators for new stats
     let rawCrime = 0;
     let rawPollution = 0;
+    let stadiums = 0;
+    let unconnectedCount = 0;
 
     // Acid Rain Damage Counter
     let structuresDamaged = 0;
@@ -102,40 +106,15 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
 
         // Upkeep & Income
         if (tile.buildingType !== BuildingType.None) {
-            // --- ROAD CONNECTIVITY CHECK ---
-            // Check 4 neighbors for Road building type
-            let connected = false;
-            // Valid buildings that don't need roads: Road, Water, Bridge, Park (maybe?)
-            // Let's say Park needs road for full effect too? For now, enforcing on all "structures".
-            if (tile.buildingType === BuildingType.Road || tile.buildingType === BuildingType.Bridge || tile.buildingType === BuildingType.Water) {
-                connected = true;
-            } else {
-                const neighbors = [
-                    { x: tile.x + 1, y: tile.y },
-                    { x: tile.x - 1, y: tile.y },
-                    { x: tile.x, y: tile.y + 1 },
-                    { x: tile.x, y: tile.y - 1 }
-                ];
-                for (const n of neighbors) {
-                    if (n.y >= 0 && n.y < grid.length && n.x >= 0 && n.x < grid[0].length) {
-                        if (grid[n.y][n.x].buildingType === BuildingType.Road || grid[n.y][n.x].buildingType === BuildingType.Bridge) {
-                            connected = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            // Store status in object for Renderer
-            tile.hasRoadAccess = connected;
+            // Store status in object for Renderer (Always true now)
+            tile.hasRoadAccess = true;
 
             const config = BUILDINGS[tile.buildingType];
             if (config) {
                 let income = config.incomeGen;
 
-                // PENALTY: Road Access
-                if (!connected && tile.buildingType !== BuildingType.None) {
-                    income = Math.floor(income * 0.5); // 50% Income
-                }
+                // ROAD REQUIREMENT REMOVED
+                // Income is now fully generated regardless of placement
 
                 // WEATHER PENALTY: Snow (Slowdown)
                 if (isSnowing && income > 0) {
@@ -169,11 +148,23 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
                 }
 
                 if (config.popGen > 0) housingCapacity += config.popGen;
+
                 if (config.jobs > 0) {
-                    totalJobs += config.jobs;
-                    if (tile.buildingType === BuildingType.Commercial) commJobs += config.jobs;
-                    if (tile.buildingType === BuildingType.Industrial) indJobs += config.jobs;
+                    // ROAD REQUIREMENT REMOVED for jobs
+                    const jobCount = config.jobs;
+
+                    totalJobs += jobCount;
+                    if (tile.buildingType === BuildingType.Commercial) commJobs += jobCount;
+                    else if (tile.buildingType === BuildingType.Industrial) indJobs += jobCount;
+                    else serviceJobs += jobCount;
                 }
+
+                if (tile.buildingType === BuildingType.Stadium) stadiums++;
+
+                // Road Access Penalty Tracker REMOVED
+                // if (tile.buildingType !== BuildingType.Road && tile.buildingType !== BuildingType.Water && !connected) {
+                //    unconnectedCount++;
+                // }
 
                 // Add Crime & Pollution
                 if (config.crime) rawCrime += config.crime;
@@ -346,12 +337,14 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
 
 
     // 4. Jobs Stats
-    const unemployment = Math.max(0, newStats.demographics.adults - totalJobs);
+    const totalWorkingAge = newStats.demographics.adults;
+    const unemploymentCount = Math.max(0, totalWorkingAge - totalJobs);
+    const unemploymentRate = totalWorkingAge > 0 ? (unemploymentCount / totalWorkingAge) : 0;
 
     // --- BENEFITS SYSTEM ---
     // Unemployed adults claim benefits.
     // Cost: $2 per unemployed person.
-    const welfareCost = unemployment * 2;
+    const welfareCost = unemploymentCount * 2;
 
     // Debt Spiral: If money < 0, maintenance costs increase (simulation)
     // --- 6. VOLATILE ECONOMY & RISK ---
@@ -442,12 +435,19 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
         newStats.happiness -= 5;
     }
 
+    newStats.unemployment = unemploymentRate;
+
+    const occupiedJobs = Math.min(totalJobs, newStats.demographics.adults);
+
     newStats.jobs = {
         commercial: commJobs,
         industrial: indJobs,
+        service: serviceJobs,
         total: totalJobs,
-        unemployment: unemployment
+        occupied: occupiedJobs,
+        unemployment: unemploymentRate
     };
+
 
     // 5. Happiness Calculation
     let baseHappiness = 100;
@@ -464,8 +464,6 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     baseHappiness += Math.min(20, parks * 2);
 
     // Stadium: Huge Happiness Boost
-    let stadiums = 0;
-    grid.flat().forEach(t => { if (t.buildingType === BuildingType.Stadium) stadiums++; });
     if (stadiums > 0) baseHappiness += 15;
 
     // Pollution Penalty (Local & Global)
@@ -495,7 +493,7 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
 
     // Unemployment penalty is mitigated by Shadow Economy (people survive)
     // "Hidden economy keeps people alive"
-    const unempPenalty = (unemployment * 0.5) * (1 - newStats.shadowEconomy);
+    const unempPenalty = (unemploymentCount * 0.5) * (1 - newStats.shadowEconomy);
     baseHappiness -= unempPenalty;
 
     // Supply Shortages hurt happiness
@@ -504,13 +502,6 @@ export const updateSimulation = (currentStats: CityStats, grid: Grid, weather?: 
     }
 
     // Road Connectivity Penalty
-    let unconnectedCount = 0;
-    grid.flat().forEach(t => {
-        if (t.buildingType !== BuildingType.None && t.buildingType !== BuildingType.Road && t.buildingType !== BuildingType.Water &&
-            t.hasRoadAccess === false) {
-            unconnectedCount++;
-        }
-    });
     if (unconnectedCount > 0) {
         // -1 Happiness per disconnected building, capped at -20
         baseHappiness -= Math.min(20, unconnectedCount);
